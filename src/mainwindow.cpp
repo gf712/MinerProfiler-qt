@@ -3,7 +3,6 @@
 #include "iostream"
 #include <algorithm>
 
-
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -14,7 +13,6 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->plotPortfolioValue->graph(0)->setScatterStyle(QCPScatterStyle::ssCircle);
     ui->plotPortfolioValue->graph(0)->setLineStyle(QCPGraph::LineStyle::lsLine);
-
 }
 
 MainWindow::~MainWindow()
@@ -24,7 +22,6 @@ MainWindow::~MainWindow()
 
 void MainWindow::parseDirectory()
 {
-
     QFileDialog dialog;
     dialog.setFileMode(QFileDialog::Directory);
     dialog.setOption(QFileDialog::DontUseNativeDialog,true);
@@ -93,32 +90,37 @@ void MainWindow::parsePortfolioUSD(QString fileName) {
         qDebug() << i << timestamp << "\t\t" << value;
 
         // store data
-        qv_time.append(timestamp.toTime_t());
-        qv_target.append(value.toDouble());
+        dataHashTable["PortfolioUSD"]["x"].append(timestamp.toTime_t());
+        dataHashTable["PortfolioUSD"]["y"].append(value.toDouble());
 
         i++;
     }
 
+    plot(dataHashTable["PortfolioUSD"]["x"], dataHashTable["PortfolioUSD"]["y"], "Time", "Portfolio value", "USD", ui->plotPortfolioValue, 0);
+
     file.close();
 }
 
-void MainWindow::plot()
-{
-    ui->plotPortfolioValue->graph(0)->setData(qv_time, qv_target);
+void MainWindow::plot(QVector<double> x, QVector<double> y, QString xlabel, QString ylabel, QString label, QCustomPlot *plotObject, int graphNumber) {
 
-    double max = *std::max_element(qv_target.constBegin(), qv_target.constEnd());
+    plotObject->legend->setVisible(true);
 
-    ui->plotPortfolioValue->xAxis->setRange(qv_time.at(0), qv_time.back());
-    ui->plotPortfolioValue->yAxis->setRange(0, max * 1.5);
+    plotObject->graph(graphNumber)->setData(x, y);
+    plotObject->graph(graphNumber)->setName(label);
 
-    ui->plotPortfolioValue->xAxis->setLabel("Time");
-    ui->plotPortfolioValue->yAxis->setLabel("Portfolio value [USD]");
+    double max = *std::max_element(y.constBegin(), y.constEnd());
 
-    ui->plotPortfolioValue->replot();
+    plotObject->xAxis->setRange(x[0], x.back());
+    plotObject->yAxis->setRange(0, max * 1.5);
+
+    plotObject->xAxis->setLabel(xlabel);
+    plotObject->yAxis->setLabel(ylabel);
+
+    plotObject->replot();
 }
 
 void MainWindow::on_loadDataButton_clicked()
 {
     parseDirectory();
-    plot();
+//    plot();
 }
