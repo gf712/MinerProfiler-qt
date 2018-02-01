@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>782</width>
-    <height>512</height>
+    <width>1063</width>
+    <height>676</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,23 +17,53 @@
    <widget class="QPushButton" name="loadDataButton">
     <property name="geometry">
      <rect>
-      <x>340</x>
-      <y>420</y>
+      <x>480</x>
+      <y>590</y>
       <width>89</width>
       <height>25</height>
      </rect>
     </property>
     <property name="text">
-     <string>Load Data</string>
+     <string>Connect to..</string>
     </property>
    </widget>
-   <widget class="QCustomPlot" name="plot" native="true">
+   <widget class="QCustomPlot" name="plotPortfolioValue" native="true">
     <property name="geometry">
      <rect>
-      <x>70</x>
-      <y>20</y>
-      <width>641</width>
-      <height>361</height>
+      <x>20</x>
+      <y>10</y>
+      <width>501</width>
+      <height>281</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QCustomPlot" name="plot_2" native="true">
+    <property name="geometry">
+     <rect>
+      <x>540</x>
+      <y>10</y>
+      <width>501</width>
+      <height>281</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QCustomPlot" name="plot_3" native="true">
+    <property name="geometry">
+     <rect>
+      <x>540</x>
+      <y>300</y>
+      <width>501</width>
+      <height>281</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QCustomPlot" name="plot_4" native="true">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>300</y>
+      <width>501</width>
+      <height>281</height>
      </rect>
     </property>
    </widget>
@@ -43,7 +73,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>782</width>
+     <width>1063</width>
      <height>22</height>
     </rect>
    </property>

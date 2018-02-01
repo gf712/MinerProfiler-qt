@@ -15,7 +15,8 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
-    void parseData();
+    void parseDirectory();
+    void parsePortfolioUSD(QString fileName);
     void plot();
 
 private slots:
