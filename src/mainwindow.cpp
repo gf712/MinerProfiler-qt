@@ -205,7 +205,7 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
                      double yminRange, double ymaxRange)
 {
 
-    double step = 600;
+    double step = 3600;
 
     QVector<double> newTimestamps;
     QVector<double> newValues;
@@ -252,7 +252,7 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
         // need to use vector, since QVector cannot handle instantiation with const..
         std::vector<double> lastNSteps(lower_bound, upper_bound);
 
-        qDebug() << "MA: " << currentStep << std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
+        qDebug() << "MA: " << QString::number(currentStep, 'g', 10) << std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
 
         double smaValue = std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
 
@@ -260,10 +260,51 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
 
     }
 
+    int firstNaPos = -1;
+    int lastNaPos = -1;
+    int i = 0;
+    double first, last;
     // now we need to interpolate NaN values
+    for(QVector<double>::iterator it = newValues.begin(); it != newValues.end(); ++it) {
+        if (std::isnan(*it) && firstNaPos < 0) {
+            qDebug() << "ITS a NAN!!!!!!!!!!!!!!!!!!!!!!!!!!!" << i;
+            // NaN value!
+            // hit first Na, so store previous value which is not NaN
+            // if it's the first value just put it as 0
+            (it == newValues.begin()) ? firstNaPos = 0 : firstNaPos = i - 1;
+            }
 
+        else if (!std::isnan(*it) && lastNaPos < 0 && firstNaPos > -1) {
+            qDebug() << "END OF NAN!!!!!!!!!!!!!!!!!!!!!!!!!!!" << i;
+            // if it is not a NaN, but we found a NaN
+            (it == newValues.end()) ? lastNaPos = i : lastNaPos = i + 1;
+            }
 
-    qDebug() << newTimestamps.length();
+        if (firstNaPos > -1 && lastNaPos > -1){
+            // and now that we have both corners we do linear interpolation
+            // check boundaries, and if outside date size put 0
+            (firstNaPos == 0) ? first = 0: first = newValues[firstNaPos];
+            (lastNaPos == newValues.length()) ? last = 0: last = newValues[lastNaPos];
+
+            double diff = last - first;
+            double stepwiseDelta = diff / (lastNaPos - firstNaPos + 1);
+
+            int iter = 1;
+            // and fill NaN
+            for (int j = firstNaPos; j < lastNaPos; j++) {
+                qDebug() << j << first + iter * stepwiseDelta;
+                newValues[j] = first + iter * stepwiseDelta;
+                iter++;
+            }
+
+            // reset values of positions to detect more NaN
+            firstNaPos = -1;
+            lastNaPos = -1;
+        }
+
+        i++;
+    }
+
 
     plot(newTimestamps, newValues, xlabel, ylabel, label, plotObject, graphNumber,
          xminRange, xmaxRange, yminRange, ymaxRange);
