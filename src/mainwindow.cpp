@@ -30,6 +30,14 @@ void MainWindow::parseDirectory()
 
     QDirIterator it(directory, QStringList("*.txt"), QDir::Files);
 
+    int speedLogFile = 0;
+    int priceLogFile = 0;
+
+    QRegularExpression priceRe("price_log_(.*)\\.txt");
+    QRegularExpression speedRe("speed_log_(.*)\\.txt");
+
+    qDebug() << speedRe;
+
     while (it.hasNext()) {
 
         // this is the file path, not the file name
@@ -46,6 +54,23 @@ void MainWindow::parseDirectory()
         }
         else if (fileName.compare("portfolio_value.txt") == 0) {
             parsePortfolioCoin(filePath);
+        }
+        else if (fileName.contains("speed_log_")) {
+
+//            qDebug() << "Processing:" << fileName << speedRe.match(fileName).captured(0) << speedRe.match(fileName).captured(1);
+
+            parseSpeed(filePath, speedRe.match(fileName).captured(1), speedLogFile);
+
+            speedLogFile++;
+        }
+
+        else if (fileName.contains("price_log_")) {
+
+//            qDebug() << "Processing:" << fileName << priceRe.match(fileName).captured(0) << priceRe.match(fileName).captured(1);
+
+            parsePrice(filePath, priceRe.match(fileName).captured(1), priceLogFile);
+
+            priceLogFile++;
         }
     }
 }
@@ -179,10 +204,112 @@ void MainWindow::parsePortfolioCoin(QString fileName)
 
 }
 
+void MainWindow::parseSpeed(QString fileName, QString orderName, int orderNumber){
+
+    QFile file(fileName);
+
+    QTextStream in(&file);
+
+    if (!file.open(QIODevice::ReadOnly)) {
+
+        qWarning("Cannot open file for reading");
+        return;
+
+    }
+
+    auto name = QString("speed_%1").arg(orderName);
+
+    auto speedUnit = new QString;
+
+    int i = 0;
+
+    while (!in.atEnd()) {
+
+        QString line = in.readLine();
+
+        QStringList lineElements = line.split(": ");
+
+        QDateTime timestamp = parseDate(lineElements.at(0));
+        QString value = parseValue(lineElements.at(1), speedUnit);
+
+//        qDebug() << i << line;
+//        qDebug() << i << timestamp << "\t\t" << value;
+
+        // store data
+        dataHashTable[name]["x"].append(timestamp.toTime_t());
+        dataHashTable[name]["y"].append(value.toDouble());
+
+        i++;
+    }
+
+    file.close();
+
+    double max = *std::max_element(dataHashTable[name]["y"].constBegin(),
+                                   dataHashTable[name]["y"].constEnd());
+
+    SMA(dataHashTable[name]["x"], dataHashTable[name]["y"], "Time",
+        "Mining Speed", orderName, ui->plotSpeed, orderNumber,
+        dataHashTable[name]["x"][0], dataHashTable[name]["x"].back(),
+            0.0, max * 1.5);
+}
+
+void MainWindow::parsePrice(QString fileName, QString orderName, int orderNumber)
+{
+    QFile file(fileName);
+
+    QTextStream in(&file);
+
+    if (!file.open(QIODevice::ReadOnly)) {
+
+        qWarning("Cannot open file for reading");
+        return;
+
+    }
+
+    auto name = QString("price_%1").arg(orderName);
+
+    auto speedUnit = new QString;
+
+    int i = 0;
+
+    while (!in.atEnd()) {
+
+        QString line = in.readLine();
+
+        QStringList lineElements = line.split(": ");
+
+        QDateTime timestamp = parseDate(lineElements.at(0));
+        QString value = parseValue(lineElements.at(1), speedUnit);
+
+//        qDebug() << i << line;
+//        qDebug() << i << timestamp << "\t\t" << value;
+
+        // store data
+        dataHashTable[name]["x"].append(timestamp.toTime_t());
+        dataHashTable[name]["y"].append(value.toDouble());
+
+        i++;
+    }
+
+    file.close();
+
+    double max = *std::max_element(dataHashTable[name]["y"].constBegin(),
+                                   dataHashTable[name]["y"].constEnd());
+
+    SMA(dataHashTable[name]["x"], dataHashTable[name]["y"], "Time",
+        "Mining Power Price", orderName, ui->plotPrice, orderNumber,
+        dataHashTable[name]["x"][0], dataHashTable[name]["x"].back(),
+            0.0, max * 1.5);
+}
+
 QDateTime MainWindow::parseDate(QString element) {
 
     // parse the date
     // sometimes there will be 2 spaces in
+
+    element.replace("[", "");
+    element.replace("]", "");
+
     element.replace("  ", " ");
 
     return QDateTime::fromString(element, "ddd MMM d HH:mm:ss yyyy");
@@ -213,8 +340,6 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
     // get number of steps from start to end
     int nSteps = floor((x.back() - x[0]) / step);
 
-    qDebug() << x.back() << x[0] << nSteps;
-
     for (int i=0; i<nSteps; i++) {
 
         // current timestep
@@ -224,11 +349,9 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
 
         // get last N steps to calculate moving average
         // 3600 = 60 minutes
-
         int j = 0;
         int lower = -1;
         int upper = -1;
-
 
         for(QVector<double>::iterator it = x.begin(); it !=x.end(); ++it) {
 
@@ -252,7 +375,7 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
         // need to use vector, since QVector cannot handle instantiation with const..
         std::vector<double> lastNSteps(lower_bound, upper_bound);
 
-        qDebug() << "MA: " << QString::number(currentStep, 'g', 10) << std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
+//        qDebug() << "MA: " << QString::number(currentStep, 'g', 10) << std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
 
         double smaValue = std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
 
@@ -267,7 +390,6 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
     // now we need to interpolate NaN values
     for(QVector<double>::iterator it = newValues.begin(); it != newValues.end(); ++it) {
         if (std::isnan(*it) && firstNaPos < 0) {
-            qDebug() << "ITS a NAN!!!!!!!!!!!!!!!!!!!!!!!!!!!" << i;
             // NaN value!
             // hit first Na, so store previous value which is not NaN
             // if it's the first value just put it as 0
@@ -275,7 +397,6 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
             }
 
         else if (!std::isnan(*it) && lastNaPos < 0 && firstNaPos > -1) {
-            qDebug() << "END OF NAN!!!!!!!!!!!!!!!!!!!!!!!!!!!" << i;
             // if it is not a NaN, but we found a NaN
             (it == newValues.end()) ? lastNaPos = i : lastNaPos = i + 1;
             }
@@ -292,7 +413,6 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
             int iter = 1;
             // and fill NaN
             for (int j = firstNaPos; j < lastNaPos; j++) {
-                qDebug() << j << first + iter * stepwiseDelta;
                 newValues[j] = first + iter * stepwiseDelta;
                 iter++;
             }
@@ -305,6 +425,8 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
         i++;
     }
 
+    double max = *std::max_element(newValues.constBegin(),
+                                   newValues.constEnd());
 
     plot(newTimestamps, newValues, xlabel, ylabel, label, plotObject, graphNumber,
          xminRange, xmaxRange, yminRange, ymaxRange);
@@ -335,8 +457,8 @@ void MainWindow::plot(QVector<double> x, QVector<double> y, QString xlabel, QStr
     plotObject->replot();
 }
 
-void MainWindow::on_loadDataButton_clicked()
-{
+void MainWindow::on_loadDataButton_clicked() {
+
     parseDirectory();
-//    plot();
+
 }
