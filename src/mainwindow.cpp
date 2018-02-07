@@ -2,13 +2,17 @@
 #include "ui_mainwindow.h"
 #include "iostream"
 #include <algorithm>
-#include <math.h>
+#include <cmath>
+
+QVector<QColor> COLORS = {Qt::blue, Qt::red};
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    createSpinBoxes();
 }
 
 MainWindow::~MainWindow()
@@ -16,19 +20,17 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::parseDirectory()
+void MainWindow::createSpinBoxes()
 {
-    QFileDialog dialog;
-    dialog.setFileMode(QFileDialog::Directory);
-    dialog.setOption(QFileDialog::DontUseNativeDialog,true);
-    dialog.setOption(QFileDialog::DontResolveSymlinks);
-    dialog.setViewMode(QFileDialog::Detail);
+    ui->SMAValue->setRange(5,20000);
+    ui->SMAValue->setValue(7200);
+}
 
-    QString directory =  dialog.getExistingDirectory(this);
+void MainWindow::parseDirectory(int SMAValue)
+{
+   //    qDebug() << directory;
 
-    qDebug() << directory;
-
-    QDirIterator it(directory, QStringList("*.txt"), QDir::Files);
+    QDirIterator it(currentDirectory, QStringList("*.txt"), QDir::Files);
 
     int speedLogFile = 0;
     int priceLogFile = 0;
@@ -36,7 +38,7 @@ void MainWindow::parseDirectory()
     QRegularExpression priceRe("price_log_(.*)\\.txt");
     QRegularExpression speedRe("speed_log_(.*)\\.txt");
 
-    qDebug() << speedRe;
+//    qDebug() << speedRe;
 
     while (it.hasNext()) {
 
@@ -46,20 +48,20 @@ void MainWindow::parseDirectory()
         // just get the last element after splitting by "/" -> file name
         QString fileName = filePath.section("/", -1, -1);
 
-        qDebug() << fileName;
+//        qDebug() << fileName;
 
         if (fileName.compare("portfolio_value_USD.txt") == 0) {
             // this is the porfolio value in USD
-            parsePortfolioUSD(filePath);
+            parsePortfolioUSD(filePath, SMAValue);
         }
         else if (fileName.compare("portfolio_value.txt") == 0) {
-            parsePortfolioCoin(filePath);
+            parsePortfolioCoin(filePath, SMAValue);
         }
         else if (fileName.contains("speed_log_")) {
 
 //            qDebug() << "Processing:" << fileName << speedRe.match(fileName).captured(0) << speedRe.match(fileName).captured(1);
 
-            parseSpeed(filePath, speedRe.match(fileName).captured(1), speedLogFile);
+            parseSpeed(filePath, speedRe.match(fileName).captured(1), speedLogFile, SMAValue);
 
             speedLogFile++;
         }
@@ -68,14 +70,14 @@ void MainWindow::parseDirectory()
 
 //            qDebug() << "Processing:" << fileName << priceRe.match(fileName).captured(0) << priceRe.match(fileName).captured(1);
 
-            parsePrice(filePath, priceRe.match(fileName).captured(1), priceLogFile);
+            parsePrice(filePath, priceRe.match(fileName).captured(1), priceLogFile, SMAValue);
 
             priceLogFile++;
         }
     }
 }
 
-void MainWindow::parsePortfolioUSD(QString fileName) {
+void MainWindow::parsePortfolioUSD(QString fileName, int SMAValue) {
 
     QFile file(fileName);
 
@@ -91,7 +93,7 @@ void MainWindow::parsePortfolioUSD(QString fileName) {
 
     int i = 0;
 
-    QString *denomination = new QString("");
+    auto denomination = new QString("");
 
     while (!in.atEnd()) {
 
@@ -120,10 +122,11 @@ void MainWindow::parsePortfolioUSD(QString fileName) {
     SMA(dataHashTable["PortfolioUSD"]["x"], dataHashTable["PortfolioUSD"]["y"], "Time",
         "Portfolio value", *denomination, ui->plotPortfolioValue, 0,
         dataHashTable["PortfolioUSD"]["x"][0], dataHashTable["PortfolioUSD"]["x"].back(),
-        0.0, max * 1.5);
+        0.0, max * 1.5, SMAValue);
+
 }
 
-void MainWindow::parsePortfolioCoin(QString fileName)
+void MainWindow::parsePortfolioCoin(QString fileName, int SMAValue)
 {
     QFile file(fileName);
 
@@ -199,12 +202,13 @@ void MainWindow::parsePortfolioCoin(QString fileName)
         SMA(dataHashTable[name]["x"], dataHashTable[name]["y"], "Time",
                 "Portfolio assets", coinNames[i], ui->plotPortfolioCoins, i,
                 dataHashTable[name]["x"][0], dataHashTable[name]["x"].back(),
-                0.0, max * 1.5);
+                0.0, max * 1.5, SMAValue);
     }
 
 }
 
-void MainWindow::parseSpeed(QString fileName, QString orderName, int orderNumber){
+void MainWindow::parseSpeed(QString fileName, QString orderName, int orderNumber,
+                            int SMAValue){
 
     QFile file(fileName);
 
@@ -250,10 +254,11 @@ void MainWindow::parseSpeed(QString fileName, QString orderName, int orderNumber
     SMA(dataHashTable[name]["x"], dataHashTable[name]["y"], "Time",
         "Mining Speed", orderName, ui->plotSpeed, orderNumber,
         dataHashTable[name]["x"][0], dataHashTable[name]["x"].back(),
-            0.0, max * 1.5);
+            0.0, max * 1.5, SMAValue);
 }
 
-void MainWindow::parsePrice(QString fileName, QString orderName, int orderNumber)
+void MainWindow::parsePrice(QString fileName, QString orderName, int orderNumber,
+                            int SMAValue)
 {
     QFile file(fileName);
 
@@ -299,7 +304,7 @@ void MainWindow::parsePrice(QString fileName, QString orderName, int orderNumber
     SMA(dataHashTable[name]["x"], dataHashTable[name]["y"], "Time",
         "Mining Power Price", orderName, ui->plotPrice, orderNumber,
         dataHashTable[name]["x"][0], dataHashTable[name]["x"].back(),
-            0.0, max * 1.5);
+            0.0, max * 1.5, SMAValue);
 }
 
 QDateTime MainWindow::parseDate(QString element) {
@@ -329,7 +334,7 @@ QString MainWindow::parseValue(QString element, QString *denomination) {
 void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
                      QString ylabel, QString label, QCustomPlot *plotObject,
                      int graphNumber, double xminRange, double xmaxRange,
-                     double yminRange, double ymaxRange)
+                     double yminRange, double ymaxRange, int SMAValue)
 {
 
     double step = 3600;
@@ -348,39 +353,44 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
         newTimestamps.append(currentStep);
 
         // get last N steps to calculate moving average
-        // 3600 = 60 minutes
         int j = 0;
         int lower = -1;
         int upper = -1;
 
-        for(QVector<double>::iterator it = x.begin(); it !=x.end(); ++it) {
-
-            if (*it >= (currentStep - 7200) && (lower == -1)) {
-                lower = j;
-            }
-            if (*it >= currentStep) {
-                upper = j;
-            }
-
-            if ((lower > -1) && (upper > -1)){
-                break;
-            }
-
-            j++;
+        if (i == 0) {
+//            qDebug() << "MA: " << QString::number(currentStep, 'g', 10) << y[0];
+            newValues.append(y[0]);
         }
 
-        QVector<double>::const_iterator lower_bound = y.begin() + lower;
-        QVector<double>::const_iterator upper_bound = y.begin() + upper;
+        else {
+            for(QVector<double>::iterator it = x.begin() + 1; it !=x.end(); ++it) {
 
-        // need to use vector, since QVector cannot handle instantiation with const..
-        std::vector<double> lastNSteps(lower_bound, upper_bound);
+                if (*it >= (currentStep - SMAValue) && (lower == -1)) {
+                    lower = j;
+                }
+                if (*it >= currentStep) {
+                    upper = j;
+                }
 
-//        qDebug() << "MA: " << QString::number(currentStep, 'g', 10) << std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
+                if ((lower > -1) && (upper > -1)){
+                    break;
+                }
 
-        double smaValue = std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
+                j++;
+            }
 
-        newValues.append(smaValue);
+            QVector<double>::const_iterator lower_bound = y.begin() + lower;
+            QVector<double>::const_iterator upper_bound = y.begin() + upper;
 
+            // need to use vector, since QVector cannot handle instantiation with const..
+            std::vector<double> lastNSteps(lower_bound, upper_bound);
+
+//            qDebug() << "MA: " << QString::number(currentStep, 'g', 10) << std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
+
+            double smaValue = std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
+
+            newValues.append(smaValue);
+        }
     }
 
     int firstNaPos = -1;
@@ -442,6 +452,7 @@ void MainWindow::plot(QVector<double> x, QVector<double> y, QString xlabel, QStr
 
 //    plotObject->graph(graphNumber)->setScatterStyle(QCPScatterStyle::ssCircle);
     plotObject->graph(graphNumber)->setLineStyle(QCPGraph::LineStyle::lsLine);
+    plotObject->graph(graphNumber)->setPen(QPen(COLORS[graphNumber]));
 
     plotObject->legend->setVisible(true);
 
@@ -457,8 +468,42 @@ void MainWindow::plot(QVector<double> x, QVector<double> y, QString xlabel, QStr
     plotObject->replot();
 }
 
+void MainWindow::clearPlots()
+{
+
+    clearPlot(ui->plotPortfolioCoins, ui->plotPortfolioCoins->graphCount());
+    clearPlot(ui->plotPortfolioValue, ui->plotPortfolioValue->graphCount());
+    clearPlot(ui->plotPrice, ui->plotPrice->graphCount());
+    clearPlot(ui->plotSpeed, ui->plotSpeed->graphCount());
+
+}
+
+void MainWindow::clearPlot(QCustomPlot *plotObject, int count)
+{
+    for( int g=0; g<count; g++)
+    {
+        plotObject->removeGraph(0);
+    }
+    plotObject->replot();
+
+}
+
 void MainWindow::on_loadDataButton_clicked() {
+    clearPlots();
 
-    parseDirectory();
+    QFileDialog dialog;
+    dialog.setFileMode(QFileDialog::Directory);
+    dialog.setOption(QFileDialog::DontUseNativeDialog,true);
+    dialog.setOption(QFileDialog::DontResolveSymlinks);
+    dialog.setViewMode(QFileDialog::Detail);
 
+    currentDirectory =  dialog.getExistingDirectory(this);
+
+    parseDirectory(14400);
+}
+
+void MainWindow::on_SMAValue_valueChanged(int SMAValue)
+{
+    clearPlots();
+    parseDirectory(SMAValue);
 }
