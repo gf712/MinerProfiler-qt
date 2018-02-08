@@ -13,5 +13,5 @@ script:
     - cmake ..
     - make
 
-#test:
-#    - make test
+test:
+    - make test
