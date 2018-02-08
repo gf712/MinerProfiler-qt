@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.1)
-project(MinerProfiler)
+project(MinerProfilerTests)
+
 
 set(CMAKE_CXX_STANDARD 11)
+set( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fPIC")
+
+enable_testing()
 
 # Find includes in corresponding build directories
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -13,23 +17,44 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOUIC_SEARCH_PATHS ui/)
 
 # Find the QtWidgets libraries
-find_package(Qt5 COMPONENTS Widgets PrintSupport Core REQUIRED)
+find_package(Qt5 COMPONENTS Widgets PrintSupport Core Test REQUIRED)
 
-include_directories(include/)
 
 set(MinerProfiler_UIS ui/mainwindow.ui)
 
-set(MinerProfiler_MOC_SRCS include/mainwindow.h
-                           include/qcustomplot.h)
+set(MinerProfiler_MOC_SRCS
+        include/mainwindow.h
+        include/qcustomplot.h)
 
-set(MinerProfiler_SRCS src/main.cpp
-                       src/mainwindow.cpp
-                       src/qcustomplot.cpp)
+set(MinerProfiler_SRCS
+        src/mainwindow.cpp
+        src/qcustomplot.cpp)
 
-add_executable(MinerProfiler
-                ${MinerProfiler_MOC_SRCS}
-                ${MinerProfiler_SRCS}
-                ${MinerProfiler_UIS})
+set(TARGET_NAME MinerProfilerLib)
 
-# Use the Widgets, Core and PrintSupport modules from Qt 5.
-qt5_use_modules(MinerProfiler Widgets Core PrintSupport)
+add_library(${TARGET_NAME} STATIC
+        ${MinerProfiler_SRCS}
+        ${MinerProfiler_MOC_SRCS}
+        ${MinerProfiler_UIS})
+
+add_executable(MinerProfiler src/main.cpp)
+
+target_include_directories(${TARGET_NAME}
+        PUBLIC
+        include/
+        src/
+        ui/
+        $<TARGET_PROPERTY:Qt5::Widgets,INTERFACE_INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:Qt5::Core,INTERFACE_INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:Qt5::PrintSupport,INTERFACE_INCLUDE_DIRECTORIES>)
+
+target_link_libraries(MinerProfiler
+        MinerProfilerLib Qt5::Widgets Qt5::Core Qt5::PrintSupport)
+
+
+# BUILD PROJECT
+add_subdirectory(tests)
+
+
+enable_testing ()
+add_test(NAME MinerProfilerTests COMMAND MinerProfilerTests)
