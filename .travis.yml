@@ -13,5 +13,5 @@ install:
 
 # Run tests
 script:
-    - export DISPLAY=:0 
+    - QT_QPA_PLATFORM='offscreen'
     - env CTEST_OUTPUT_ON_FAILURE=1 make test
