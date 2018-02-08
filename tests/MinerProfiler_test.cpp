@@ -5,7 +5,6 @@
 //#include "MinerProfiler_test.h"
 
 #include <QTest>
-#include <QDebug>
 #include "mainwindow.h"
 
 class TestParsers: public QObject
@@ -21,7 +20,7 @@ void TestParsers::PortfolioValueTest() {
 
     mainWindowObject->parsePortfolioUSD("tests/data/portfolio_value_test_data.txt", 1);
 
-    QCOMPARE(mainWindowObject->get_dataHashTable()["PortfolioUSD"]["x"][0], 1517926817);
+    QCOMPARE(mainWindowObject->get_dataHashTable()["PortfolioUSD"]["x"][0], 1517926817.0);
 
 }
 
