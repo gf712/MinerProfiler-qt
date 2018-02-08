@@ -2,6 +2,12 @@ sudo: true
 dist: trusty
 language: cpp
 
+# For GUI testing
+before_script:
+  - "export DISPLAY=:99.0"
+  - "sh -e /etc/init.d/xvfb start"
+  - sleep
+
 # Install packages
 install:
     - sudo apt-get update
@@ -13,5 +19,4 @@ install:
 
 # Run tests
 script:
-    - QT_QPA_PLATFORM='offscreen'
     - env CTEST_OUTPUT_ON_FAILURE=1 make test
