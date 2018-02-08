@@ -45,9 +45,11 @@ public:
              int graphNumber, double xminRange, double xmaxRange,
              double yminRange, double ymaxRange, int SMAValue);
 
+    // GETTER
+    QHash<QString, QHash<QString, QVector<double>>> get_dataHashTable() {return dataHashTable;}
+
 private slots:
     void on_loadDataButton_clicked();
-
     void on_SMAValue_valueChanged(int arg1);
 
 private:
