@@ -19,6 +19,7 @@ public:
 
     // Window functions
     void createSpinBoxes();
+    void createTimeBoxes();
 
     // FILE PARSERS
     void parseDirectory(int SMAValue);
@@ -44,19 +45,27 @@ public:
              QString ylabel, QString label, QCustomPlot *plotObject,
              int graphNumber, double xminRange, double xmaxRange,
              double yminRange, double ymaxRange, int SMAValue);
+    void setFixedWindow();
 
-    // GETTER
+    // GETTERS
     QHash<QString, QHash<QString, QVector<double>>> get_dataHashTable() {return dataHashTable;}
 
 private slots:
     void on_loadDataButton_clicked();
-    void on_SMAValue_valueChanged(int arg1);
+
+    void on_SMAValue_editingFinished();
+
+    void on_startTimeEdit_editingFinished();
+    void on_endTimeEdit_editingFinished();
+
 
 private:
 
     Ui::MainWindow *ui;
     QHash<QString, QHash<QString, QVector<double>>> dataHashTable;
     QString currentDirectory;
+    double minXRange;
+    double maxXRange;
 
 };
 

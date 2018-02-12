@@ -28,18 +28,18 @@ void MainWindow::createSpinBoxes()
 
 void MainWindow::parseDirectory(int SMAValue)
 {
-   //    qDebug() << directory;
 
     QDirIterator it(currentDirectory, QStringList("*.txt"), QDir::Files);
 
     int speedLogFile = 0;
     int priceLogFile = 0;
 
+    maxXRange = -1;
+    minXRange = QDateTime::currentDateTime().toTime_t();
+
     QRegularExpression priceRe("price_log_(.*)\\.txt");
     QRegularExpression speedRe("speed_log_(.*)\\.txt");
-
-//    qDebug() << speedRe;
-
+    
     while (it.hasNext()) {
 
         // this is the file path, not the file name
@@ -58,23 +58,22 @@ void MainWindow::parseDirectory(int SMAValue)
             parsePortfolioCoin(filePath, SMAValue);
         }
         else if (fileName.contains("speed_log_")) {
-
-//            qDebug() << "Processing:" << fileName << speedRe.match(fileName).captured(0) << speedRe.match(fileName).captured(1);
-
+            
             parseSpeed(filePath, speedRe.match(fileName).captured(1), speedLogFile, SMAValue);
 
             speedLogFile++;
         }
 
         else if (fileName.contains("price_log_")) {
-
-//            qDebug() << "Processing:" << fileName << priceRe.match(fileName).captured(0) << priceRe.match(fileName).captured(1);
-
+            
             parsePrice(filePath, priceRe.match(fileName).captured(1), priceLogFile, SMAValue);
 
             priceLogFile++;
         }
     }
+
+    setFixedWindow();
+    createTimeBoxes();
 }
 
 void MainWindow::parsePortfolioUSD(QString fileName, int SMAValue) {
@@ -89,8 +88,7 @@ void MainWindow::parsePortfolioUSD(QString fileName, int SMAValue) {
         return;
 
     }
-
-
+    
     int i = 0;
 
     auto denomination = new QString("");
@@ -204,7 +202,6 @@ void MainWindow::parsePortfolioCoin(QString fileName, int SMAValue)
                 dataHashTable[name]["x"][0], dataHashTable[name]["x"].back(),
                 0.0, max * 1.5, SMAValue);
     }
-
 }
 
 void MainWindow::parseSpeed(QString fileName, QString orderName, int orderNumber,
@@ -435,8 +432,22 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
         i++;
     }
 
-    double max = *std::max_element(newValues.constBegin(),
-                                   newValues.constEnd());
+    double maxXCurrent = *std::max_element(newTimestamps.constBegin(),
+                                    newTimestamps.constEnd());
+
+    qDebug() << maxXCurrent;
+
+    if (maxXCurrent > maxXRange)
+        maxXRange = maxXCurrent;
+
+    double minXCurrent = *std::min_element(newTimestamps.constBegin(),
+                                           newTimestamps.constEnd());
+
+    qDebug() << minXCurrent;
+
+    if (minXCurrent < minXRange)
+        minXRange = minXCurrent;
+
 
     plot(newTimestamps, newValues, xlabel, ylabel, label, plotObject, graphNumber,
          xminRange, xmaxRange, yminRange, ymaxRange);
@@ -459,11 +470,16 @@ void MainWindow::plot(QVector<double> x, QVector<double> y, QString xlabel, QStr
     plotObject->graph(graphNumber)->setData(x, y);
     plotObject->graph(graphNumber)->setName(label);
 
-    plotObject->xAxis->setRange(xminRange, xmaxRange);
+//    plotObject->xAxis->setRange(xminRange, xmaxRange);
     plotObject->yAxis->setRange(yminRange, ymaxRange);
 
     plotObject->xAxis->setLabel(xlabel);
     plotObject->yAxis->setLabel(ylabel);
+
+    QSharedPointer<QCPAxisTickerDateTime> dateTicker(new QCPAxisTickerDateTime);
+    dateTicker->setDateTimeFormat("dd/MM/yy\nhh:mm:ss");
+    plotObject->xAxis->setTicker(dateTicker);
+    plotObject->xAxis->setTickLabelRotation(60);
 
     plotObject->replot();
 }
@@ -488,7 +504,36 @@ void MainWindow::clearPlot(QCustomPlot *plotObject, int count)
 
 }
 
-void MainWindow::on_loadDataButton_clicked() {
+void MainWindow::setFixedWindow() {
+
+    qDebug() << minXRange << maxXRange;
+
+    ui->plotPortfolioCoins->xAxis->setRange(minXRange, maxXRange);
+    ui->plotPortfolioCoins->replot();
+    ui->plotPortfolioValue->xAxis->setRange(minXRange, maxXRange);
+    ui->plotPortfolioValue->replot();
+    ui->plotPrice->xAxis->setRange(minXRange, maxXRange);
+    ui->plotPrice->replot();
+    ui->plotSpeed->xAxis->setRange(minXRange, maxXRange);
+    ui->plotSpeed->replot();
+}
+
+//void MainWindow::on_SMAValue_valueChanged(int SMAValue)
+//{
+//    clearPlots();
+//    parseDirectory(SMAValue);
+//}
+
+void MainWindow::on_SMAValue_editingFinished()
+{
+    clearPlots();
+    parseDirectory(this->ui->SMAValue->text().toInt());
+//    on_SMAValue_valueChanged(this->ui->SMAValue->text().toInt());
+}
+
+
+void MainWindow::on_loadDataButton_clicked()
+{
     clearPlots();
 
     QFileDialog dialog;
@@ -502,8 +547,23 @@ void MainWindow::on_loadDataButton_clicked() {
     parseDirectory(14400);
 }
 
-void MainWindow::on_SMAValue_valueChanged(int SMAValue)
+
+void MainWindow::on_startTimeEdit_editingFinished()
 {
-    clearPlots();
-    parseDirectory(SMAValue);
+    minXRange = this->ui->startTimeEdit->dateTime().toTime_t();
+    setFixedWindow();
+}
+
+void MainWindow::on_endTimeEdit_editingFinished()
+{
+    maxXRange = this->ui->endTimeEdit->dateTime().toTime_t();
+    setFixedWindow();
+}
+
+void MainWindow::createTimeBoxes() {
+    QDateTime timestamp;
+    timestamp.setTime_t(static_cast<uint>(maxXRange));
+    this->ui->endTimeEdit->setDateTime(timestamp);
+    timestamp.setTime_t(static_cast<uint>(minXRange));
+    this->ui->startTimeEdit->setDateTime(timestamp);
 }
