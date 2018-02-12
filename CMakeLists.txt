@@ -19,7 +19,7 @@ set(CMAKE_AUTOUIC_SEARCH_PATHS ui/)
 # Find the QtWidgets libraries
 find_package(Qt5 COMPONENTS Widgets PrintSupport Core Test REQUIRED)
 
-
+# Create some variables with relevant files
 set(MinerProfiler_UIS ui/mainwindow.ui)
 
 set(MinerProfiler_MOC_SRCS
@@ -30,6 +30,8 @@ set(MinerProfiler_SRCS
         src/mainwindow.cpp
         src/qcustomplot.cpp)
 
+# Create a static library with the main project
+# and then use it to run the tests -> avoids recompiling
 set(TARGET_NAME MinerProfilerLib)
 
 add_library(${TARGET_NAME} STATIC
@@ -37,6 +39,7 @@ add_library(${TARGET_NAME} STATIC
         ${MinerProfiler_MOC_SRCS}
         ${MinerProfiler_UIS})
 
+# BUILD PROJECT
 add_executable(MinerProfiler src/main.cpp)
 
 target_include_directories(${TARGET_NAME}
@@ -51,10 +54,7 @@ target_include_directories(${TARGET_NAME}
 target_link_libraries(MinerProfiler
         MinerProfilerLib Qt5::Widgets Qt5::Core Qt5::PrintSupport)
 
-
-# BUILD PROJECT
 add_subdirectory(tests)
-
 
 enable_testing ()
 add_test(NAME MinerProfilerTests COMMAND MinerProfilerTests)
