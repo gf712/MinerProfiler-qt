@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 project(MinerProfilerTests)
 
+find_package(Boost)
 
 set(CMAKE_CXX_STANDARD 11)
 set( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fPIC")
@@ -49,12 +50,16 @@ target_include_directories(${TARGET_NAME}
         ui/
         $<TARGET_PROPERTY:Qt5::Widgets,INTERFACE_INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:Qt5::Core,INTERFACE_INCLUDE_DIRECTORIES>
-        $<TARGET_PROPERTY:Qt5::PrintSupport,INTERFACE_INCLUDE_DIRECTORIES>)
+        $<TARGET_PROPERTY:Qt5::PrintSupport,INTERFACE_INCLUDE_DIRECTORIES>
+        ${Boost_INCLUDE_DIR})
 
 target_link_libraries(MinerProfiler
-        MinerProfilerLib Qt5::Widgets Qt5::Core Qt5::PrintSupport)
+        MinerProfilerLib Qt5::Widgets Qt5::Core Qt5::PrintSupport ${Boost_LIBRARY_DIR})
 
 add_subdirectory(tests)
 
-enable_testing ()
-add_test(NAME MinerProfilerTests COMMAND MinerProfilerTests)
+add_test(NAME MinerProfilerParserTests COMMAND MinerProfilerParserTests
+         WORKING_DIRECTORY ${MinerProfilerTests_SOURCE_DIR})
+
+add_test(NAME MinerProfilerSMATests COMMAND MinerProfilerSMATests
+         WORKING_DIRECTORY ${MinerProfilerTests_SOURCE_DIR})
