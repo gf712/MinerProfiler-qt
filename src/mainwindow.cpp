@@ -3,15 +3,31 @@
 #include "iostream"
 #include <algorithm>
 #include <cmath>
+#include <boost/range/combine.hpp>
+
+//######################################################################################################################
+//                                            CONSTANT DEFINITIONS
+//######################################################################################################################
 
 QVector<QColor> COLORS = {Qt::blue, Qt::red};
+int DEFAULT_SMA = 60;
+
+//######################################################################################################################
+//                                          END OF CONSTANT DEFINITIONS
+//######################################################################################################################
+
+
+
+//######################################################################################################################
+//                                    CONSTRUCTOR AND DESTRUCTOR DEFINITIONS
+//######################################################################################################################
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-
+    dataLoaded = false;
     createSpinBoxes();
 }
 
@@ -26,9 +42,16 @@ void MainWindow::createSpinBoxes()
     ui->SMAValue->setValue(7200);
 }
 
-void MainWindow::parseDirectory(int SMAValue)
-{
+//######################################################################################################################
+//                                 END OF CONSTRUCTOR AND DESTRUCTOR DEFINITIONS
+//######################################################################################################################
 
+//######################################################################################################################
+//                                               PARSER ROUTINES
+//######################################################################################################################
+
+void MainWindow::parseDirectory()
+{
     QDirIterator it(currentDirectory, QStringList("*.txt"), QDir::Files);
 
     int speedLogFile = 0;
@@ -39,7 +62,7 @@ void MainWindow::parseDirectory(int SMAValue)
 
     QRegularExpression priceRe("price_log_(.*)\\.txt");
     QRegularExpression speedRe("speed_log_(.*)\\.txt");
-    
+
     while (it.hasNext()) {
 
         // this is the file path, not the file name
@@ -48,35 +71,38 @@ void MainWindow::parseDirectory(int SMAValue)
         // just get the last element after splitting by "/" -> file name
         QString fileName = filePath.section("/", -1, -1);
 
-//        qDebug() << fileName;
+        qDebug() << "FILENAME" << fileName;
 
         if (fileName.compare("portfolio_value_USD.txt") == 0) {
             // this is the porfolio value in USD
-            parsePortfolioUSD(filePath, SMAValue);
+            parsePortfolioUSD(filePath);
         }
         else if (fileName.compare("portfolio_value.txt") == 0) {
-            parsePortfolioCoin(filePath, SMAValue);
+            parsePortfolioCoin(filePath);
         }
         else if (fileName.contains("speed_log_")) {
-            
-            parseSpeed(filePath, speedRe.match(fileName).captured(1), speedLogFile, SMAValue);
+
+            parseSpeed(filePath, speedRe.match(fileName).captured(1), speedLogFile);
 
             speedLogFile++;
+
+            OrderNames.insert(speedRe.match(fileName).captured(1));
         }
 
         else if (fileName.contains("price_log_")) {
-            
-            parsePrice(filePath, priceRe.match(fileName).captured(1), priceLogFile, SMAValue);
+
+            parsePrice(filePath, priceRe.match(fileName).captured(1), priceLogFile);
 
             priceLogFile++;
+
+            OrderNames.insert(priceRe.match(fileName).captured(1));
         }
     }
 
-    setFixedWindow();
-    createTimeBoxes();
 }
 
-void MainWindow::parsePortfolioUSD(QString fileName, int SMAValue) {
+
+void MainWindow::parsePortfolioUSD(QString fileName) {
 
     QFile file(fileName);
 
@@ -88,7 +114,7 @@ void MainWindow::parsePortfolioUSD(QString fileName, int SMAValue) {
         return;
 
     }
-    
+
     int i = 0;
 
     auto denomination = new QString("");
@@ -102,9 +128,6 @@ void MainWindow::parsePortfolioUSD(QString fileName, int SMAValue) {
         QDateTime timestamp = parseDate(lineElements.at(0));
         QString value = parseValue(lineElements.at(1), denomination);
 
-//        qDebug() << i << line;
-//        qDebug() << i << timestamp << "\t\t" << value;
-
         // store data
         dataHashTable["PortfolioUSD"]["x"].append(timestamp.toTime_t());
         dataHashTable["PortfolioUSD"]["y"].append(value.toDouble());
@@ -114,17 +137,9 @@ void MainWindow::parsePortfolioUSD(QString fileName, int SMAValue) {
 
     file.close();
 
-    double max = *std::max_element(dataHashTable["PortfolioUSD"]["y"].constBegin(),
-                                   dataHashTable["PortfolioUSD"]["y"].constEnd());
-
-    SMA(dataHashTable["PortfolioUSD"]["x"], dataHashTable["PortfolioUSD"]["y"], "Time",
-        "Portfolio value", *denomination, ui->plotPortfolioValue, 0,
-        dataHashTable["PortfolioUSD"]["x"][0], dataHashTable["PortfolioUSD"]["x"].back(),
-        0.0, max * 1.5, SMAValue);
-
 }
 
-void MainWindow::parsePortfolioCoin(QString fileName, int SMAValue)
+void MainWindow::parsePortfolioCoin(QString fileName)
 {
     QFile file(fileName);
 
@@ -155,14 +170,14 @@ void MainWindow::parsePortfolioCoin(QString fileName, int SMAValue)
 
         // parse over each column of each line
 
-        for (int i=0; i<valueElements.length(); i++) {
+        for (int j=0; j<valueElements.length(); j++) {
 
-            QString *coinName = new QString("");
+            auto *coinName = new QString("");
 
-            QString value = parseValue(valueElements[i], coinName);
+            QString value = parseValue(valueElements[j], coinName);
 
             if (first) {
-                coinNames.append(*coinName);
+                CoinNames.push_back(*coinName);
             }
 
             QString name = QString("PortfolioCoin_%1").arg(*coinName);
@@ -178,34 +193,9 @@ void MainWindow::parsePortfolioCoin(QString fileName, int SMAValue)
     }
 
     file.close();
-
-    double max = 0;
-
-    for (int i=0; i<coinNames.length(); i++) {
-
-        QString name = QString("PortfolioCoin_%1").arg(coinNames[i]);
-
-        double max_i = *std::max_element(dataHashTable[name]["y"].constBegin(),
-                                         dataHashTable[name]["y"].constEnd());
-
-        if (max_i > max) {
-            max = max_i;
-        }
-    }
-
-    for (int i=0; i<coinNames.length(); i++) {
-
-        QString name = QString("PortfolioCoin_%1").arg(coinNames[i]);
-
-        SMA(dataHashTable[name]["x"], dataHashTable[name]["y"], "Time",
-                "Portfolio assets", coinNames[i], ui->plotPortfolioCoins, i,
-                dataHashTable[name]["x"][0], dataHashTable[name]["x"].back(),
-                0.0, max * 1.5, SMAValue);
-    }
 }
 
-void MainWindow::parseSpeed(QString fileName, QString orderName, int orderNumber,
-                            int SMAValue){
+void MainWindow::parseSpeed(QString fileName, QString orderName, int orderNumber){
 
     QFile file(fileName);
 
@@ -233,9 +223,6 @@ void MainWindow::parseSpeed(QString fileName, QString orderName, int orderNumber
         QDateTime timestamp = parseDate(lineElements.at(0));
         QString value = parseValue(lineElements.at(1), speedUnit);
 
-//        qDebug() << i << line;
-//        qDebug() << i << timestamp << "\t\t" << value;
-
         // store data
         dataHashTable[name]["x"].append(timestamp.toTime_t());
         dataHashTable[name]["y"].append(value.toDouble());
@@ -244,18 +231,9 @@ void MainWindow::parseSpeed(QString fileName, QString orderName, int orderNumber
     }
 
     file.close();
-
-    double max = *std::max_element(dataHashTable[name]["y"].constBegin(),
-                                   dataHashTable[name]["y"].constEnd());
-
-    SMA(dataHashTable[name]["x"], dataHashTable[name]["y"], "Time",
-        "Mining Speed", orderName, ui->plotSpeed, orderNumber,
-        dataHashTable[name]["x"][0], dataHashTable[name]["x"].back(),
-            0.0, max * 1.5, SMAValue);
 }
 
-void MainWindow::parsePrice(QString fileName, QString orderName, int orderNumber,
-                            int SMAValue)
+void MainWindow::parsePrice(QString fileName, QString orderName, int orderNumber)
 {
     QFile file(fileName);
 
@@ -283,9 +261,6 @@ void MainWindow::parsePrice(QString fileName, QString orderName, int orderNumber
         QDateTime timestamp = parseDate(lineElements.at(0));
         QString value = parseValue(lineElements.at(1), speedUnit);
 
-//        qDebug() << i << line;
-//        qDebug() << i << timestamp << "\t\t" << value;
-
         // store data
         dataHashTable[name]["x"].append(timestamp.toTime_t());
         dataHashTable[name]["y"].append(value.toDouble());
@@ -294,14 +269,6 @@ void MainWindow::parsePrice(QString fileName, QString orderName, int orderNumber
     }
 
     file.close();
-
-    double max = *std::max_element(dataHashTable[name]["y"].constBegin(),
-                                   dataHashTable[name]["y"].constEnd());
-
-    SMA(dataHashTable[name]["x"], dataHashTable[name]["y"], "Time",
-        "Mining Power Price", orderName, ui->plotPrice, orderNumber,
-        dataHashTable[name]["x"][0], dataHashTable[name]["x"].back(),
-            0.0, max * 1.5, SMAValue);
 }
 
 QDateTime MainWindow::parseDate(QString element) {
@@ -328,91 +295,93 @@ QString MainWindow::parseValue(QString element, QString *denomination) {
     return valueRe.match(element).captured(0);
 }
 
-void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
-                     QString ylabel, QString label, QCustomPlot *plotObject,
-                     int graphNumber, double xminRange, double xmaxRange,
-                     double yminRange, double ymaxRange, int SMAValue)
+
+//######################################################################################################################
+//                                           END OF PARSER ROUTINES
+//######################################################################################################################
+
+
+//######################################################################################################################
+//                                           CLEANING DATA ROUTINES
+//######################################################################################################################
+
+void MainWindow::SMA(QVector<double> &x, QVector<double> &y,
+                     QVector<double>* newTimestamps, QVector<double>* newValues)
 {
 
-    double step = 3600;
-
-    QVector<double> newTimestamps;
-    QVector<double> newValues;
-
     // get number of steps from start to end
-    int nSteps = floor((x.back() - x[0]) / step);
+    int nSteps = static_cast<int>(floor((x.back() - x[0]) / (SMAValue * 60))) + 1;
+
+    qDebug() << x.size() << y.size() <<  nSteps;
 
     for (int i=0; i<nSteps; i++) {
 
-        // current timestep
-        double currentStep = x[0] + (i * step);
+        QVector<double> lastNSteps;
 
-        newTimestamps.append(currentStep);
+        // current timestep
+        double currentStep = x[0] + (i * (SMAValue * 60));
+
+        QDateTime timestamp;
+        timestamp.setTime_t(currentStep);
+
+        newTimestamps->append(currentStep);
 
         // get last N steps to calculate moving average
-        int j = 0;
-        int lower = -1;
-        int upper = -1;
-
         if (i == 0) {
-//            qDebug() << "MA: " << QString::number(currentStep, 'g', 10) << y[0];
-            newValues.append(y[0]);
+            newValues->append(y[0]);
         }
 
         else {
-            for(QVector<double>::iterator it = x.begin() + 1; it !=x.end(); ++it) {
+            // super useful boost function for parallel looping
+            for(auto const& values: boost::combine(x, y))
+            {
 
-                if (*it >= (currentStep - SMAValue) && (lower == -1)) {
-                    lower = j;
-                }
-                if (*it >= currentStep) {
-                    upper = j;
-                }
+                double x_i, y_i;
 
-                if ((lower > -1) && (upper > -1)){
+                boost::tie(x_i, y_i) = values;
+
+                if (x_i > currentStep) {
                     break;
                 }
 
-                j++;
+                if (x_i >= (currentStep - (SMAValue * 60))) {
+                    lastNSteps.push_back(y_i);
+
+                }
             }
 
-            QVector<double>::const_iterator lower_bound = y.begin() + lower;
-            QVector<double>::const_iterator upper_bound = y.begin() + upper;
-
-            // need to use vector, since QVector cannot handle instantiation with const..
-            std::vector<double> lastNSteps(lower_bound, upper_bound);
-
-//            qDebug() << "MA: " << QString::number(currentStep, 'g', 10) << std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
-
             double smaValue = std::accumulate(lastNSteps.begin(), lastNSteps.end(), 0.0) / lastNSteps.size();
+            QDateTime timestamp;
+            timestamp.setTime_t(currentStep);
 
-            newValues.append(smaValue);
+            newValues->append(smaValue);
         }
     }
+
 
     int firstNaPos = -1;
     int lastNaPos = -1;
     int i = 0;
     double first, last;
     // now we need to interpolate NaN values
-    for(QVector<double>::iterator it = newValues.begin(); it != newValues.end(); ++it) {
+    for(auto it = newValues->begin(); it != newValues->end(); ++it) {
         if (std::isnan(*it) && firstNaPos < 0) {
             // NaN value!
             // hit first Na, so store previous value which is not NaN
             // if it's the first value just put it as 0
-            (it == newValues.begin()) ? firstNaPos = 0 : firstNaPos = i - 1;
+            (it == newValues->begin()) ? firstNaPos = 0 : firstNaPos = i - 1;
             }
 
         else if (!std::isnan(*it) && lastNaPos < 0 && firstNaPos > -1) {
             // if it is not a NaN, but we found a NaN
-            (it == newValues.end()) ? lastNaPos = i : lastNaPos = i + 1;
+            (it == newValues->end()) ? lastNaPos = i : lastNaPos = i + 1;
             }
 
         if (firstNaPos > -1 && lastNaPos > -1){
             // and now that we have both corners we do linear interpolation
             // check boundaries, and if outside date size put 0
-            (firstNaPos == 0) ? first = 0: first = newValues[firstNaPos];
-            (lastNaPos == newValues.length()) ? last = 0: last = newValues[lastNaPos];
+            (firstNaPos == 0) ? first = 0: first = (*newValues)[firstNaPos];
+            (lastNaPos == newValues->length()) ? last = 0: last = (*newValues)[lastNaPos];
 
             double diff = last - first;
             double stepwiseDelta = diff / (lastNaPos - firstNaPos + 1);
@@ -420,7 +389,7 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
             int iter = 1;
             // and fill NaN
             for (int j = firstNaPos; j < lastNaPos; j++) {
-                newValues[j] = first + iter * stepwiseDelta;
+                (*newValues)[j] = first + iter * stepwiseDelta;
                 iter++;
             }
 
@@ -432,30 +401,104 @@ void MainWindow::SMA(QVector<double> x, QVector<double> y, QString xlabel,
         i++;
     }
 
-    double maxXCurrent = *std::max_element(newTimestamps.constBegin(),
-                                    newTimestamps.constEnd());
+    double maxXCurrent = *std::max_element(newTimestamps->constBegin(),
+                                    newTimestamps->constEnd());
 
     qDebug() << maxXCurrent;
 
     if (maxXCurrent > maxXRange)
         maxXRange = maxXCurrent;
 
-    double minXCurrent = *std::min_element(newTimestamps.constBegin(),
-                                           newTimestamps.constEnd());
+    double minXCurrent = *std::min_element(newTimestamps->constBegin(),
+                                           newTimestamps->constEnd());
 
     qDebug() << minXCurrent;
 
     if (minXCurrent < minXRange)
         minXRange = minXCurrent;
 
-
-    plot(newTimestamps, newValues, xlabel, ylabel, label, plotObject, graphNumber,
-         xminRange, xmaxRange, yminRange, ymaxRange);
 }
 
-void MainWindow::plot(QVector<double> x, QVector<double> y, QString xlabel, QString ylabel,
-                      QString label, QCustomPlot *plotObject, int graphNumber, double xminRange,
-                      double xmaxRange, double yminRange, double ymaxRange) {
+//######################################################################################################################
+//                                        END OF CLEANING DATA ROUTINES
+//######################################################################################################################
+
+
+//######################################################################################################################
+//                                               PLOTTING ROUTINES
+//######################################################################################################################
+
+
+void MainWindow::SMAplot(QVector<double> &x, QVector<double> &y, const QString &xlabel,
+                         const QString &ylabel, const QString &label, QCustomPlot *plotObject,
+                         int graphNumber) {
+
+    auto tempX = new QVector<double>;
+    auto tempY = new QVector<double>;
+
+    SMA(x, y, tempX, tempY);
+
+    plot(*tempX, *tempY, xlabel, ylabel, label, plotObject, graphNumber);
+
+    delete  tempX;
+    delete tempY;
+}
+
+void MainWindow::plotPortfolioUSD() {
+
+    SMAplot(dataHashTable["PortfolioUSD"]["x"], dataHashTable["PortfolioUSD"]["y"], "Time",
+            "Portfolio value", "USD", ui->plotPortfolioValue, 0);
+}
+
+void MainWindow::plotPortfolioCoin() {
+
+    int i= 0;
+
+    for (auto coinName: CoinNames) {
+
+        QString name = QString("PortfolioCoin_%1").arg(coinName);
+
+        SMAplot(dataHashTable[name]["x"], dataHashTable[name]["y"], "Time",
+                "Portfolio value", coinName, ui->plotPortfolioCoins, i);
+
+        i++;
+    }
+}
+
+void MainWindow::plotOrders() {
+
+    int i = 0;
+
+    for (const auto &orderName: OrderNames) {
+
+        auto priceName = QString("price_%1").arg(orderName);
+        auto speedName = QString("speed_%1").arg(orderName);
+
+        qDebug() << priceName << speedName;
+
+        SMAplot(dataHashTable[priceName]["x"], dataHashTable[priceName]["y"], "Time",
+                "Mining Speed", orderName, ui->plotSpeed, i);
+
+        SMAplot(dataHashTable[speedName]["x"], dataHashTable[speedName]["y"], "Time",
+                "Mining Power Price", orderName, ui->plotPrice, i);
+
+        i++;
+    }
+}
+
+
+void MainWindow::createPlots() {
+
+    plotPortfolioUSD();
+    plotPortfolioCoin();
+    plotOrders();
+
+    addPadding();
+
+}
+
+void MainWindow::plot(QVector<double> &x, QVector<double> &y, const QString &xlabel, const QString &ylabel,
+                      const QString &label, QCustomPlot *plotObject, int graphNumber) {
 
     plotObject->addGraph();
 
@@ -470,19 +513,20 @@ void MainWindow::plot(QVector<double> x, QVector<double> y, QString xlabel, QStr
     plotObject->graph(graphNumber)->setData(x, y);
     plotObject->graph(graphNumber)->setName(label);
 
-//    plotObject->xAxis->setRange(xminRange, xmaxRange);
-    plotObject->yAxis->setRange(yminRange, ymaxRange);
-
     plotObject->xAxis->setLabel(xlabel);
     plotObject->yAxis->setLabel(ylabel);
+    plotObject->xAxis->setTickLabelFont(QFont(QFont().family(), 8));
+    plotObject->yAxis->setTickLabelFont(QFont(QFont().family(), 8));
 
     QSharedPointer<QCPAxisTickerDateTime> dateTicker(new QCPAxisTickerDateTime);
     dateTicker->setDateTimeFormat("dd/MM/yy\nhh:mm:ss");
     plotObject->xAxis->setTicker(dateTicker);
-    plotObject->xAxis->setTickLabelRotation(60);
+//    plotObject->xAxis->setTickLabelRotation(60);
 
+    plotObject->rescaleAxes();
     plotObject->replot();
 }
+
 
 void MainWindow::clearPlots()
 {
@@ -504,31 +548,58 @@ void MainWindow::clearPlot(QCustomPlot *plotObject, int count)
 
 }
 
-void MainWindow::setFixedWindow() {
-
-    qDebug() << minXRange << maxXRange;
-
-    ui->plotPortfolioCoins->xAxis->setRange(minXRange, maxXRange);
+void MainWindow::addPadding() {
+    ui->plotPortfolioCoins->yAxis->setRange(0, ui->plotPortfolioCoins->yAxis->range().upper * 1.4);
     ui->plotPortfolioCoins->replot();
-    ui->plotPortfolioValue->xAxis->setRange(minXRange, maxXRange);
+
+    ui->plotPortfolioValue->yAxis->setRange(0, ui->plotPortfolioValue->yAxis->range().upper * 1.4);
     ui->plotPortfolioValue->replot();
-    ui->plotPrice->xAxis->setRange(minXRange, maxXRange);
+
+    ui->plotPrice->yAxis->setRange(0, ui->plotPrice->yAxis->range().upper * 1.4);
     ui->plotPrice->replot();
-    ui->plotSpeed->xAxis->setRange(minXRange, maxXRange);
+
+    ui->plotSpeed->yAxis->setRange(0, ui->plotSpeed->yAxis->range().upper * 1.4);
     ui->plotSpeed->replot();
 }
 
-//void MainWindow::on_SMAValue_valueChanged(int SMAValue)
-//{
-//    clearPlots();
-//    parseDirectory(SMAValue);
-//}
+//######################################################################################################################
+//                                            END OF PLOTTING ROUTINES
+//######################################################################################################################
+
+//######################################################################################################################
+//                                            EVENT HANDLING ROUTINES
+//######################################################################################################################
+
+void MainWindow::setFixedWindow() {
+
+    ui->plotPortfolioCoins->xAxis->setRange(minXRange, maxXRange);
+    ui->plotPortfolioCoins->replot();
+
+    ui->plotPortfolioValue->xAxis->setRange(minXRange, maxXRange);
+    ui->plotPortfolioValue->replot();
+
+    ui->plotPrice->xAxis->setRange(minXRange, maxXRange);
+    ui->plotPrice->replot();
+
+    ui->plotSpeed->xAxis->setRange(minXRange, maxXRange);
+    ui->plotSpeed->replot();
+
+}
+
+void MainWindow::on_SMAValue_valueChanged(int SMAValue_)
+{
+    if (dataLoaded) {
+
+        clearPlots();
+        SMAValue = SMAValue_;
+        createPlots();
+
+    }
+}
 
 void MainWindow::on_SMAValue_editingFinished()
 {
-    clearPlots();
-    parseDirectory(this->ui->SMAValue->text().toInt());
-//    on_SMAValue_valueChanged(this->ui->SMAValue->text().toInt());
+    on_SMAValue_valueChanged(this->ui->SMAValue->text().toInt());
 }
 
 
@@ -544,7 +615,17 @@ void MainWindow::on_loadDataButton_clicked()
 
     currentDirectory =  dialog.getExistingDirectory(this);
 
-    parseDirectory(14400);
+    parseDirectory();
+
+    dataLoaded = true;
+
+    SMAValue = DEFAULT_SMA;
+
+    createPlots();
+
+    createTimeBoxes();
+
+    setFixedWindow();
 }
 
 
@@ -567,3 +648,7 @@ void MainWindow::createTimeBoxes() {
     timestamp.setTime_t(static_cast<uint>(minXRange));
     this->ui->startTimeEdit->setDateTime(timestamp);
 }
+
+//######################################################################################################################
+//                                          END OF EVENT HANDLING ROUTINES
+//######################################################################################################################
