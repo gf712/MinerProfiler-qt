@@ -11,12 +11,19 @@ set(CMAKE_AUTOUIC OFF)
 
 # BUILD TESTS
 
-configure_file(data/portfolio_value_test_data.txt data/portfolio_value_test_data.txt COPYONLY)
+configure_file(data/portfolio_value.txt data/portfolio_value.txt COPYONLY)
+configure_file(data/portfolio_value_USD.txt data/portfolio_value_USD.txt COPYONLY)
+configure_file(data/price_log_us-order1.txt data/price_log_us-order1.txt COPYONLY)
+configure_file(data/speed_log_us-order1.txt data/speed_log_us-order1.txt COPYONLY)
 
-set(TARGET_NAME MinerProfilerTests)
+add_executable(MinerProfilerParserTests
+        MinerProfilerParserTests.cpp)
 
-add_executable(MinerProfilerTests
-        MinerProfiler_test.cpp)
+target_link_libraries(MinerProfilerParserTests
+        PRIVATE MinerProfilerLib Qt5::Test Qt5::Widgets Qt5::Core Qt5::PrintSupport)
 
-target_link_libraries(MinerProfilerTests
+add_executable(MinerProfilerSMATests
+        MinerProfilerSMATests.cpp)
+
+target_link_libraries(MinerProfilerSMATests
         PRIVATE MinerProfilerLib Qt5::Test Qt5::Widgets Qt5::Core Qt5::PrintSupport)
